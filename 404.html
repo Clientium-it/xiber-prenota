@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta name="robots" content="noindex, nofollow">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XIBER — Prenota con il sales giusto</title>
+<style>
+  :root{--bg:#0f1720;--card:#fff;--ink:#0f1720;--muted:#5b6672;--brand:#039BE5;--line:#e3e8ee}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);padding:24px}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{color:#fff;font-size:22px;margin:0 0 4px}
+  .sub{color:#93a1b0;font-size:14px;margin:0 0 20px}
+  .card{background:var(--card);border-radius:14px;padding:22px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:14px 0 6px}
+  select{width:100%;padding:12px 14px;font-size:15px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);appearance:none}
+  select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(3,155,229,.15)}
+  .hidden{display:none}
+  .assign{margin-top:18px;padding:14px 16px;border-radius:10px;background:#eef7fe;border:1px solid #cfeafd;font-size:14px}
+  .assign b{color:var(--brand)}
+  .frame{margin-top:16px;border:1px solid var(--line);border-radius:12px;overflow:hidden;min-height:1000px}
+  iframe{width:100%;height:1000px;min-height:1000px;border:0;display:block}
+  .reset{margin-top:10px;font-size:13px;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline}
+  .foot{color:#607080;font-size:12px;margin-top:16px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>XIBER — Prenota un incontro</h1>
+  <p class="sub">Seleziona il tipo di richiesta e la zona: ti mostro il calendario del referente corretto.</p>
+  <div class="card">
+    <label for="servizio">Tipo di richiesta</label>
+    <select id="servizio">
+      <option value="">— Seleziona —</option>
+      <option value="servizi">BU Servizi</option>
+      <option value="cons-diretta">Consulenza Energetica — Diretta</option>
+      <option value="cons-indiretta">Consulenza Energetica — Indiretta</option>
+      <option value="mt-diretta">BU Multitech — Diretta</option>
+      <option value="mt-indiretta">BU Multitech — Indiretta</option>
+    </select>
+
+    <div id="wrapRegione" class="hidden">
+      <label for="regione">Regione</label>
+      <select id="regione">
+        <option value="">— Seleziona regione —</option>
+      </select>
+    </div>
+
+    <div id="wrapProvincia" class="hidden">
+      <label for="provincia">Provincia (Toscana)</label>
+      <select id="provincia">
+        <option value="">— Seleziona provincia —</option>
+      </select>
+    </div>
+
+    <div id="assign" class="assign hidden"></div>
+    <div id="frameBox" class="frame hidden"><iframe id="cal" src="about:blank"></iframe></div>
+    <button id="reset" class="reset hidden">↺ Ricomincia</button>
+  </div>
+  <p class="foot">XIBER · routing interno — non condividere all'esterno senza verifica</p>
+</div>
+
+<script>
+const BASE = "https://api.leadconnectorhq.com/widget/booking/";
+const SALES = {
+  storchi:  {nome:"Enrico Storchi",     cal:"vSE8WqT4f5ussC1cSMB0"},
+  scattone: {nome:"Paolo Scattone",     cal:"3C0ESf9rEEDayVCDu3ek"},
+  vacchino: {nome:"Danilo Vacchino",    cal:"APkQeDPfIW4X4NaT9xIF"},
+  rapa:     {nome:"Nicola Rapa",        cal:"RTlqoovaA5SDpFUQ2aka"},
+  tentoni:  {nome:"Davide Tentoni",     cal:"BPOA9Z4QmuOewZonbvCO"},
+  marcelli: {nome:"Pierpaolo Marcelli", cal:"bJHNIHXMQykgZF4iKxwU"},
+  bordoni:  {nome:"Andrea Bordoni",     cal:"KIa3cR3kmh6cBDxJOfmH"},
+  lupi:     {nome:"Lorenzo Lupi",       cal:"5TsJtXlZbpVXulzL3Uch"},
+};
+// Regione -> sales (rami Diretta: Consulenza Energetica + BU Multitech, stessa mappa da sheet). "toscana" = split per provincia.
+const REGIONE = {
+  "Veneto":"scattone","Trentino-Alto Adige":"scattone","Friuli-Venezia Giulia":"scattone",
+  "Piemonte":"vacchino","Valle d'Aosta":"vacchino","Liguria":"vacchino",
+  "Lombardia":"rapa",
+  "Marche":"tentoni","Emilia-Romagna":"tentoni",
+  "Toscana":"__toscana__",
+  "Abruzzo":"marcelli","Lazio":"marcelli","Umbria":"marcelli","Molise":"marcelli",
+  "Campania":"marcelli","Puglia":"marcelli","Basilicata":"marcelli","Calabria":"marcelli",
+  "Sicilia":"marcelli","Sardegna":"marcelli",
+};
+// Toscana: provincia -> sales
+const TOSCANA = {
+  "Arezzo (AR)":"lupi","Firenze (FI)":"lupi","Grosseto (GR)":"lupi","Livorno (LI)":"lupi","Lucca (LU)":"lupi",
+  "Massa-Carrara (MS)":"vacchino",
+  "Pisa (PI)":"lupi","Pistoia (PT)":"lupi","Prato (PO)":"lupi","Siena (SI)":"lupi",
+};
+
+const $ = id => document.getElementById(id);
+const servizio=$("servizio"), regione=$("regione"), provincia=$("provincia");
+const wrapReg=$("wrapRegione"), wrapProv=$("wrapProvincia"), assign=$("assign"), frameBox=$("frameBox"), cal=$("cal"), reset=$("reset");
+
+// popola regioni e province
+Object.keys(REGIONE).forEach(r=>{const o=document.createElement("option");o.value=r;o.textContent=r;regione.appendChild(o)});
+Object.keys(TOSCANA).forEach(p=>{const o=document.createElement("option");o.value=p;o.textContent=p;provincia.appendChild(o)});
+
+function show(el,on){el.classList.toggle("hidden",!on)}
+function clearCal(){show(assign,false);show(frameBox,false);show(reset,false);cal.src="about:blank"}
+
+function route(key){
+  const s=SALES[key];
+  assign.innerHTML=`Referente: <b>${s.nome}</b>`;
+  cal.src=BASE+s.cal;
+  show(assign,true);show(frameBox,true);show(reset,true);
+}
+
+servizio.onchange=()=>{
+  clearCal(); show(wrapReg,false); show(wrapProv,false); regione.value=""; provincia.value="";
+  const v=servizio.value;
+  if(v==="servizi")   return route("storchi");
+  if(v==="cons-indiretta"||v==="mt-indiretta") return route("bordoni");
+  if(v==="cons-diretta"||v==="mt-diretta")     show(wrapReg,true);
+};
+regione.onchange=()=>{
+  clearCal(); show(wrapProv,false); provincia.value="";
+  const v=regione.value; if(!v) return;
+  const target=REGIONE[v];
+  if(target==="__toscana__") return show(wrapProv,true);
+  route(target);
+};
+provincia.onchange=()=>{
+  clearCal(); const v=provincia.value; if(!v) return; route(TOSCANA[v]);
+};
+reset.onclick=()=>{servizio.value="";regione.value="";provincia.value="";show(wrapReg,false);show(wrapProv,false);clearCal()};
+</script>
+<!-- Auto-resize ufficiale GHL: adatta l'altezza dell'iframe al contenuto del widget -->
+<script src="https://link.msgsndr.com/js/form_embed.js"></script>
+</body>
+</html>
